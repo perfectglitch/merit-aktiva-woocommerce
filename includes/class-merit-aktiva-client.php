@@ -52,7 +52,7 @@ class Merit_Aktiva_Client
     private function post($data, $endpoint)
     {
         $args = array(
-            'body'        => $data,
+            'body'        => json_encode($data),
             'redirection' => '5',
             'httpversion' => '1.0',
             'blocking'    => true,
@@ -66,12 +66,24 @@ class Merit_Aktiva_Client
 
         $signature = $this->signURL($this->apiId, $this->apiKey, $timestamp, json_encode($data));
         $url       = $this->apiUrl . $endpoint . '?ApiId=' . $this->apiId . '&timestamp=' . $timestamp . '&signature=' . $signature;
-        $this->logger->info("Url $url", $this->context);
 
         $response = wp_remote_post($url, $args);
+
         $this->logger->info('Client response: ' . json_encode($response), $this->context);
 
-        return $response['body'];
+        return $this->transform_response($response);
+    }
+
+    private function transform_response($response)
+    {
+        $response_body = isset($response['body']) ? $response['body'] : [];
+        if (is_array($response_body)) {
+            return $response_body;
+        } else if (is_string($response_body)) {
+            return json_decode($response_body, true);
+        } else {
+            return [];
+        }
     }
 
     private function signURL($id, $key, $timestamp, $json)
