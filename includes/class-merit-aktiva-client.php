@@ -3,6 +3,9 @@
 class Merit_Aktiva_Client
 {
 
+    private $logger;
+    private $context;
+
     private const INVOICE_ENDPOINT = 'sendinvoice';
 
     private $apiId;
@@ -11,9 +14,11 @@ class Merit_Aktiva_Client
 
     public function __construct($apiUrl, $apiId, $apiKey)
     {
-        $this->apiUrl = $apiUrl;
-        $this->apiId  = $apiId;
-        $this->apiKey = $apiKey;
+        $this->apiUrl  = $apiUrl;
+        $this->apiId   = $apiId;
+        $this->apiKey  = $apiKey;
+        $this->logger  = wc_get_logger();
+        $this->context = array('source' => get_class());
     }
 
     public static function create($apiUrl, $apiId, $apiKey)
@@ -27,26 +32,46 @@ class Merit_Aktiva_Client
 
     public function send_invoice($invoice)
     {
-        $logger = wc_get_logger();
-        $context = array('source' => get_class());
-        
         $response = $this->post($invoice, self::INVOICE_ENDPOINT);
-        $logger->debug('Client response: ' . $response, $context);
 
-        $data     = json_decode($response, true);
-        
+        $data = json_decode($response, true);
 
         if (!$data || !is_array($data) || !isset($data['InvoiceId'])) {
             return false;
         }
 
-        $guid = strtoupper($data['InvoiceId']);
+        $guid    = strtoupper($data['InvoiceId']);
         $success = preg_match('/^\{?[A-Z0-9]{8}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{12}\}?$/', $guid) == 1;
 
         return [
             'success' => $success,
-            'data' => $data
+            'data'    => $data,
         ];
+    }
+
+    private function post($data, $endpoint)
+    {
+        $args = array(
+            'body'        => $data,
+            'redirection' => '5',
+            'httpversion' => '1.0',
+            'blocking'    => true,
+            'headers'     => array(
+                'Content-Type' => 'application/json',
+                'Accept'       => 'application/json',
+            ),
+        );
+
+        $timestamp = (new DateTime('now', wp_timezone()))->format('YmdHis');
+
+        $signature = $this->signURL($this->apiId, $this->apiKey, $timestamp, json_encode($data));
+        $url       = $this->apiUrl . $endpoint . '?ApiId=' . $this->apiId . '&timestamp=' . $timestamp . '&signature=' . $signature;
+        $this->logger->info("Url $url", $this->context);
+
+        $response = wp_remote_post($url, $args);
+        $this->logger->info('Client response: ' . json_encode($response), $this->context);
+
+        return $response['body'];
     }
 
     private function signURL($id, $key, $timestamp, $json)
@@ -55,41 +80,5 @@ class Merit_Aktiva_Client
         $rawSig    = hash_hmac('sha256', $signable, $key, true);
         $base64Sig = base64_encode($rawSig);
         return $base64Sig;
-
-    }
-
-    private function post($data, $endpoint)
-    {
-        $responseString = "";
-
-        $ch = curl_init();
-
-        $TIMESTAMP = date("YmdHis");
-
-        $signature = $this->signURL($this->apiId, $this->apiKey, $TIMESTAMP, json_encode($data));
-        curl_setopt($ch, CURLOPT_URL, $this->apiUrl . $endpoint . "?ApiId=" . $this->apiId . "&timestamp=" . $TIMESTAMP . "&signature=" . $signature);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Accept: application/json'));
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_HEADER, 1);
-        $response = curl_exec($ch);
-
-        $header_size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-        $body        = substr($response, $header_size);
-
-        if (curl_getinfo($ch, CURLINFO_RESPONSE_CODE) != 200) {
-
-            return false;
-
-        } else {
-
-            $woSlashes      = stripslashes($body);
-            $strLen         = strlen($woSlashes);
-            $responseString = substr(substr($woSlashes, 1, $strLen), 0, $strLen - 2);
-
-        }
-        curl_close($ch);
-        return $responseString;
     }
 }

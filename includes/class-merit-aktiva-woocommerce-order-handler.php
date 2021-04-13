@@ -12,29 +12,51 @@ class Merit_Aktiva_Woocommerce_Order_Handler
         $this->logging_context = array('source' => get_class());
     }
 
+    /**
+     * @param WC_Order|int $order
+     * @return void
+     */
     public function on_order_status_completed($order)
     {
         if (is_int($order)) {
             $order = new WC_Order($order);
         }
 
+        // WTF
+        if (false !== strpos(strtolower($order->get_payment_method()), 'paypal')) {
+            return;
+        }
+
+        try {
+            $this->create_merit_aktiva_invoice($order);
+        } catch (Exception $e) {
+            $this->logger->error($e, $this->logging_context);
+        }
+    }
+
+    /**
+     * @param WC_Order
+     * @return void
+     */
+    private function create_merit_aktiva_invoice($order)
+    {
         /**
          * @var Merit_Aktiva_Client
          */
         $client = apply_filters('merit-aktiva-woocommerce-integeration-get-client', null);
         if (!$client) {
-            $this->logger->info(sprintf("Not sending order %d to Merit Aktiva - client not initialized", $order->get_id()), $this->logging_context);
+            $order->add_order_note(sprintf(__('Skipped creating invoice in Merit Aktiva - API not configured', 'merit-aktiva-woocommerce-plugin'), $order->get_id()));
             return;
         }
 
-        $this->logger->info(sprintf("Handling order %d", $order->get_id()), $this->logging_context);
+        $this->logger->info(sprintf('Handling order %d', $order->get_id()), $this->logging_context);
         if ($order->get_meta('merit_aktiva_invoice_guid')) {
-            $this->logger->warning(sprintf("Order %d already has Merit Aktiva invoice", $order->get_id()), $this->logging_context);
+            $order->add_order_note(sprintf(__('Order %d already has Merit Aktiva invoice', 'merit-aktiva-woocommerce-plugin'), $order->get_id()));
             return;
         }
 
         $invoice = $this->create_invoice_from_order($order);
-        $this->logger->debug("Sending invoice: " . json_encode($invoice), $this->logging_context);
+        $this->logger->debug('Sending invoice: ' . json_encode($invoice), $this->logging_context);
         $result = $client->send_invoice($invoice);
 
         $this->handle_invoice_result($order, $result);
@@ -63,15 +85,30 @@ class Merit_Aktiva_Woocommerce_Order_Handler
             'InvoiceNo'       => $this->get_invoice_number($order),
             'InvoiceRow'      => $this->get_invoice_row($order),
 
-            'TotalAmount'     => number_format((float) $order->get_total() - $order->get_total_tax() - $order->get_shipping_tax(), wc_get_price_decimals(), '.', ''),
+            'TotalAmount'     => $order->get_total() - $order->get_total_tax(),
             'CurrencyCode'    => $order->get_currency(),
-            'RoundingAmount'  => 2,
+            'RoundingAmount'  => 0,
             'TaxAmount'       => $this->get_tax_amount($order),
 
             'DocDate'         => date('Ymd'),
             'TransactionDate' => $order->get_date_paid()->date('Ymd'),
 
             'Customer'        => $this->get_customer_data($order),
+
+            'Payment'         => $this->get_payment_data($order),
+        ];
+    }
+
+    /**
+     * @param WC_Order $order
+     * @return array
+     */
+    private function get_payment_data($order)
+    {
+        return [
+            'PaymentMethod' => apply_filters('merit-aktiva-woocommerce-integeration-get-payment-method', $order->get_payment_method()),
+            'PaidAmount'    => $order->get_total(),
+            'PaymDate'      => $order->get_date_paid()->date('Ymd'),
         ];
     }
 
@@ -84,7 +121,7 @@ class Merit_Aktiva_Woocommerce_Order_Handler
         return [
             'Name'          => $order->get_formatted_billing_full_name(),
             'NotTDCustomer' => 'true',
-            'Address'       => $order->get_billing_address_1(),
+            'Address'       => sprintf('%s %s', $order->get_billing_address_1(), $order->get_billing_address_2()),
             'City'          => $order->get_billing_city(),
             'County'        => $order->get_billing_state(),
             'PostalCode'    => $order->get_billing_postcode(),
@@ -101,13 +138,11 @@ class Merit_Aktiva_Woocommerce_Order_Handler
     private function get_invoice_row($order)
     {
         $row = [];
-        foreach ($order->get_items() as /** @var WC_Order_Item */$item) {
-            /** @var WC_Product */
-
+        foreach (array_merge($order->get_items(), $order->get_items('shipping')) as /** @var WC_Order_Item */$item) {
             $row[] = [
                 'Item'     => $this->get_order_item_data($item),
                 'Quantity' => $item->get_quantity(),
-                'Price'    => $order->get_item_total($item, true),
+                'Price'    => $this->calculate_order_item_price($order, $item),
                 'TaxId'    => 'b9b25735-6a15-4d4e-8720-25b254ae3d21',
             ];
         }
@@ -116,20 +151,31 @@ class Merit_Aktiva_Woocommerce_Order_Handler
     }
 
     /**
+     * @param WC_Order $order
+     * @param WC_Order_Item $item
+     * @return void
+     */
+    private function calculate_order_item_price($order, $item)
+    {
+        return $order->get_item_total($item, false);
+    }
+
+    /**
      * @param WC_Order_Item $item
      * @return array
      */
     private function get_order_item_data($item)
     {
+        $this->logger->debug($item->get_type(), $this->logging_context);
         switch ($item->get_type()) {
-            case 'product':
+            case 'line_item':
                 /** @var WC_Order_Item_Product */
                 $product_item = $item;
                 /** @var WC_Product|bool */
                 $product = $product_item->get_product();
                 return [
                     'Code'        => $product->get_sku(),
-                    'Description' => $product->get_description(),
+                    'Description' => $product->get_name(),
                     'Type'        => 3,
                 ];
                 break;
@@ -137,7 +183,7 @@ class Merit_Aktiva_Woocommerce_Order_Handler
             default:
                 return [
                     'Code'        => $item->get_id(),
-                    'Description' => $item->get_name(),
+                    'Description' => apply_filters('merit-aktiva-woocommerce-integeration-get-shipping-description', $item->get_name()),
                     'Type'        => 2,
                 ];
         }
