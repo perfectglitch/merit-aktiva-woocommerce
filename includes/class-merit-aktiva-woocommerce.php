@@ -86,7 +86,7 @@ class Merit_Aktiva_Woocommerce_Plugin
     private function define_woocommerce_hooks()
     {
         $order_status_change_listener = new Merit_Aktiva_Woocommerce_Order_Handler();
-        $this->loader->add_action('woocommerce_order_status_completed', $order_status_change_listener, 'on_order_status_completed');
+        $this->loader->add_action('woocommerce_order_status_completed', $order_status_change_listener, 'on_order_status_completed', -1, 1);
         $this->loader->add_action('woocommerce_order_action_merit_aktiva_woocommerce_create_invoice_action', $order_status_change_listener, 'on_order_status_completed');
     }
 

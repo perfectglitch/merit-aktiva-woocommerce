@@ -58,7 +58,8 @@ class Merit_Aktiva_Woocommerce_Order_Handler
         $invoice = $this->create_invoice_from_order($order);
         $this->logger->debug('Sending invoice: ' . json_encode($invoice), $this->logging_context);
         $result = $client->send_invoice($invoice);
-
+		$this->logger->debug('Invoice result: ' . json_encode($result), $this->logging_context);
+		
         $this->handle_invoice_result($order, $result);
     }
 
