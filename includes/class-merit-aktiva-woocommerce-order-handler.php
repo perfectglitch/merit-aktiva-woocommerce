@@ -85,7 +85,7 @@ class Merit_Aktiva_Woocommerce_Order_Handler
             'InvoiceNo'       => $this->get_invoice_number($order),
             'InvoiceRow'      => $this->get_invoice_row($order),
 
-            'TotalAmount'     => $order->get_total() - $order->get_total_tax(),
+            'TotalAmount'     => round($order->get_total() - $order->get_total_tax(), wc_get_price_decimals()),
             'CurrencyCode'    => $order->get_currency(),
             'RoundingAmount'  => 0,
             'TaxAmount'       => $this->get_tax_amount($order),
@@ -94,8 +94,8 @@ class Merit_Aktiva_Woocommerce_Order_Handler
             'TransactionDate' => $order->get_date_paid()->date('Ymd'),
 
             'Customer'        => $this->get_customer_data($order),
-
-            'Payment'         => $this->get_payment_data($order),
+            //TODO: make configurable
+            //'Payment'         => $this->get_payment_data($order),
         ];
     }
 
