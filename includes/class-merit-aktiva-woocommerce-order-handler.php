@@ -157,7 +157,7 @@ class Merit_Aktiva_Woocommerce_Order_Handler
      */
     private function calculate_order_item_price($order, $item)
     {
-        return $order->get_item_total($item, false);
+        return $order->get_item_total($item, false, false);
     }
 
     /**
