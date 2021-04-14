@@ -58,8 +58,8 @@ class Merit_Aktiva_Woocommerce_Order_Handler
         $invoice = $this->create_invoice_from_order($order);
         $this->logger->debug('Sending invoice: ' . json_encode($invoice), $this->logging_context);
         $result = $client->send_invoice($invoice);
-		$this->logger->debug('Invoice result: ' . json_encode($result), $this->logging_context);
-		
+        $this->logger->debug('Invoice result: ' . json_encode($result), $this->logging_context);
+
         $this->handle_invoice_result($order, $result);
     }
 
@@ -91,7 +91,7 @@ class Merit_Aktiva_Woocommerce_Order_Handler
             'RoundingAmount'  => 0,
             'TaxAmount'       => $this->get_tax_amount($order),
 
-            'DocDate'         => date('Ymd'),
+            'DocDate'         => $order->get_date_created()->date('Ymd'),
             'TransactionDate' => $order->get_date_paid()->date('Ymd'),
 
             'Customer'        => $this->get_customer_data($order),
