@@ -41,7 +41,7 @@ class Merit_Aktiva_Client
         }
 
         $guid    = strtoupper($data['InvoiceId']);
-        $success = preg_match('/^\{?[A-Z0-9]{8}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{12}\}?$/', $guid) == 1;
+        $success = preg_match('/^[{]?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}[}]?$/i', $guid) == 1;
 
         return [
             'success' => $success,
