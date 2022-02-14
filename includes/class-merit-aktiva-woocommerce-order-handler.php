@@ -19,15 +19,15 @@ class Merit_Aktiva_Woocommerce_Order_Handler
      */
     public function on_order_status_completed($order)
     {
-        if (!$this->client) {
-            $order->add_order_note(sprintf(__('Skipped creating invoice in Merit Aktiva - API not configured', 'merit-aktiva-woocommerce-plugin'), $order->get_id()));
-            return;
-        }
-
         $order = $this->validate_order($order);
         
         if (!$order) {
             $this->logger->error('Received invalid order from order status hook', $this->logging_context);
+            return;
+        }
+
+        if (!$this->client) {
+            $order->add_order_note(sprintf(__('Skipped creating invoice in Merit Aktiva - API not configured', 'merit-aktiva-woocommerce-plugin'), $order->get_id()));
             return;
         }
 
