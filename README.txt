@@ -17,7 +17,8 @@ Integration for Merit Aktiva invoices.
 == Installation ==
 
 1. Install plugin by downloading latest release from https://github.com/perfectglitch/merit-aktiva-woocommerce/releases/latest.
-2. Add Merit Aktiva configuration in Woocommerce integrations section.
+2. Add Merit Aktiva configuration in Woocommerce integrations section:
+   Woocommerce -> Settings -> Integrations -> Merit Aktiva Woocommerce Integration
 
 == Frequently Asked Questions ==
 
