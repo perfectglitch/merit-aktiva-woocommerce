@@ -10,7 +10,6 @@ class Merit_Aktiva_Woocommerce_Order_Handler
     {
         $this->logger          = wc_get_logger();
         $this->logging_context = array('source' => get_class());
-        $this->client          = apply_filters('merit-aktiva-woocommerce-integeration-get-client', null);
     }
 
     /**
@@ -23,11 +22,6 @@ class Merit_Aktiva_Woocommerce_Order_Handler
         
         if (!$order) {
             $this->logger->error('Received invalid order from order status hook', $this->logging_context);
-            return;
-        }
-
-        if (!$this->client) {
-            $order->add_order_note(sprintf(__('Skipped creating invoice in Merit Aktiva - API not configured', 'merit-aktiva-woocommerce-plugin'), $order->get_id()));
             return;
         }
 
@@ -64,10 +58,17 @@ class Merit_Aktiva_Woocommerce_Order_Handler
      */
     private function create_merit_aktiva_invoice($order)
     {
+        /** @var Merit_Aktiva_Client|false */
+        $client = apply_filters('merit-aktiva-woocommerce-integeration-get-client', null);
+        if (!$client) {
+            $order->add_order_note(sprintf(__('Skipped creating invoice in Merit Aktiva - API not configured', 'merit-aktiva-woocommerce-plugin'), $order->get_id()));
+            return;
+        }
+
         $invoice = $this->create_invoice_from_order($order);
 
         $this->logger->debug('Sending invoice: ' . json_encode($invoice), $this->logging_context);
-        $result = $this->client->send_invoice($invoice);
+        $result = $client->send_invoice($invoice);
         $this->logger->debug('Invoice result: ' . json_encode($result), $this->logging_context);
 
         $this->handle_invoice_result($order, $result);
@@ -77,8 +78,8 @@ class Merit_Aktiva_Woocommerce_Order_Handler
     {
         update_post_meta($order->get_id(), 'merit_aktiva_result', json_encode($result));
 
-        if ($result['success']) {   
-            update_post_meta($order->get_id(), 'merit_aktiva_invoice_guid', $result['data']['InvoiceId']);
+        if ($result) {   
+            update_post_meta($order->get_id(), 'merit_aktiva_invoice_guid', $result['InvoiceId']);
             $order->add_order_note(sprintf(__('Successfully created order invoice in Merit Aktiva', 'merit-aktiva-woocommerce-plugin'), $order->get_id()));
         } else {
             $order->add_order_note(sprintf(__('Failed to create order invoice in Merit Aktiva', 'merit-aktiva-woocommerce-plugin'), $order->get_id()));

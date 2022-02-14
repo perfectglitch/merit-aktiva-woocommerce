@@ -32,21 +32,13 @@ class Merit_Aktiva_Client
 
     public function send_invoice($invoice)
     {
-        $response = $this->post($invoice, self::INVOICE_ENDPOINT);
+        $data = $this->post($invoice, self::INVOICE_ENDPOINT);
 
-        $data = json_decode($response, true);
-
-        if (!$data || !is_array($data) || !isset($data['InvoiceId'])) {
+        if (!isset($data['InvoiceId'])) {
             return false;
         }
 
-        $guid    = strtoupper($data['InvoiceId']);
-        $success = preg_match('/^[{]?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}[}]?$/i', $guid) == 1;
-
-        return [
-            'success' => $success,
-            'data'    => $data,
-        ];
+        return $data;
     }
 
     private function post($data, $endpoint)
